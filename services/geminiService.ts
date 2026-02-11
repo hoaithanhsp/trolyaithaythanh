@@ -57,8 +57,8 @@ const initializeChatWithModel = (modelName: string) => {
     model: modelName,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
-      temperature: 0.3,
-      maxOutputTokens: 4000,
+      temperature: 0.4,
+      maxOutputTokens: 65536,
     },
     history: [],
   });

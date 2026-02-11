@@ -56,8 +56,8 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, forc
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-0 md:p-4">
+            <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] md:max-h-[90vh] overflow-y-auto">
                 {/* Header */}
                 <div className="flex items-center justify-between p-5 border-b border-slate-200 bg-gradient-to-r from-emerald-500 to-teal-600">
                     <div className="flex items-center gap-3">
@@ -137,14 +137,14 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, forc
                                     key={model}
                                     onClick={() => setSelectedModelState(model)}
                                     className={`w-full p-3 rounded-xl border-2 text-left transition-all flex items-center justify-between ${selectedModel === model
-                                            ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-                                            : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                                        : 'border-slate-200 hover:border-slate-300 text-slate-700'
                                         }`}
                                 >
                                     <div className="flex items-center gap-3">
                                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${index === 0 ? 'bg-gradient-to-br from-emerald-400 to-teal-500 text-white' :
-                                                index === 1 ? 'bg-gradient-to-br from-purple-400 to-indigo-500 text-white' :
-                                                    'bg-gradient-to-br from-orange-400 to-amber-500 text-white'
+                                            index === 1 ? 'bg-gradient-to-br from-purple-400 to-indigo-500 text-white' :
+                                                'bg-gradient-to-br from-orange-400 to-amber-500 text-white'
                                             }`}>
                                             {index + 1}
                                         </div>

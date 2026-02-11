@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { Message, Role, SupportMode } from './types';
 import { INITIAL_GREETING } from './constants';
 import { sendMessageToGemini, generateDailyReport, initializeChat, hasApiKey } from './services/geminiService';
@@ -27,9 +27,8 @@ function App() {
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [isApiKeyConfigured, setIsApiKeyConfigured] = useState(false);
 
-  // Use a ref for the scroll container instead of a dummy div at the end
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Check API key on mount
@@ -50,7 +49,7 @@ function App() {
   };
 
   // Handle scroll logic
-  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (chatContainerRef.current) {
       const { scrollHeight, clientHeight } = chatContainerRef.current;
       chatContainerRef.current.scrollTo({
@@ -58,26 +57,26 @@ function App() {
         behavior,
       });
     }
-  };
+  }, []);
 
   // Auto scroll on new messages
   useLayoutEffect(() => {
     scrollToBottom('smooth');
-  }, [messages, isLoading]);
+  }, [messages, isLoading, scrollToBottom]);
 
   // Show/hide scroll to bottom button
-  const handleScroll = () => {
+  const handleScroll = useCallback(() => {
     if (chatContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
       const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
       setShowScrollButton(!isNearBottom);
     }
-  };
+  }, []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      if (file.size > 5 * 1024 * 1024) {
         alert("Ảnh quá lớn! Vui lòng chọn ảnh dưới 5MB.");
         return;
       }
@@ -85,13 +84,19 @@ function App() {
       const reader = new FileReader();
       reader.onload = (event) => {
         setSelectedImage(event.target?.result as string);
-        // Focus back on input
         setTimeout(() => inputRef.current?.focus(), 100);
       };
       reader.readAsDataURL(file);
     }
-    // Reset input so same file can be selected again if needed
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Auto-resize textarea
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    const textarea = e.target;
+    textarea.style.height = '48px';
+    textarea.style.height = Math.min(textarea.scrollHeight, window.innerWidth < 768 ? 100 : 150) + 'px';
   };
 
   const handleSendMessage = async (e?: React.FormEvent) => {
@@ -101,11 +106,11 @@ function App() {
     const userText = input;
     const userImage = selectedImage;
 
-    // Reset inputs immediately
     setInput('');
     setSelectedImage(null);
+    // Reset textarea height
+    if (inputRef.current) inputRef.current.style.height = '48px';
 
-    // Add User Message
     const userMessage: Message = {
       id: Date.now().toString(),
       role: Role.USER,
@@ -118,7 +123,6 @@ function App() {
     setIsLoading(true);
 
     try {
-      // Pass both text and image to the service
       const responseText = await sendMessageToGemini(userText || "Gửi một ảnh bài tập", currentMode, messages, userImage || undefined);
 
       const botMessage: Message = {
@@ -140,7 +144,6 @@ function App() {
       }]);
     } finally {
       setIsLoading(false);
-      // Keep focus on input for desktop
       if (window.innerWidth > 768) {
         setTimeout(() => inputRef.current?.focus(), 100);
       }
@@ -159,7 +162,7 @@ function App() {
     };
     setMessages(prev => [...prev, reportMessage]);
     setIsGeneratingReport(false);
-    setIsSidebarOpen(false); // Close mobile sidebar if open
+    setIsSidebarOpen(false);
   };
 
   return (
@@ -168,16 +171,17 @@ function App() {
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div
-          className="absolute inset-0 bg-black/50 z-20 md:hidden backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 bg-black/50 z-20 md:hidden backdrop-blur-sm transition-opacity"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar (Desktop & Mobile) */}
       <aside className={`
-        absolute md:relative z-30 w-[280px] h-full transition-transform duration-300 ease-in-out shadow-xl md:shadow-none
+        fixed md:relative z-30 h-full transition-transform duration-300 ease-in-out
+        w-[85vw] max-w-[320px] md:w-80 md:max-w-none
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-        md:block md:w-80 md:p-6 p-0 bg-white md:bg-transparent
+        md:block md:p-6 p-0 bg-white md:bg-transparent shadow-2xl md:shadow-none
       `}>
         <div className="h-full md:h-full bg-white md:rounded-2xl md:shadow-sm md:border md:border-slate-200 overflow-hidden flex flex-col">
           <div className="h-full p-4 md:p-0 overflow-y-auto custom-scrollbar">
@@ -189,9 +193,9 @@ function App() {
           {/* Close button for mobile */}
           <button
             onClick={() => setIsSidebarOpen(false)}
-            className="absolute top-4 right-4 md:hidden text-slate-400 hover:text-slate-600"
+            className="absolute top-3 right-3 md:hidden text-slate-400 hover:text-slate-600 bg-white/80 backdrop-blur-sm rounded-full p-2 shadow-sm"
           >
-            <X size={24} />
+            <X size={20} />
           </button>
         </div>
       </aside>
@@ -200,24 +204,28 @@ function App() {
       <main className="flex-1 flex flex-col h-full relative w-full bg-white md:bg-slate-50">
 
         {/* Header (Mobile Only) */}
-        <header className="md:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200 shadow-sm z-10 sticky top-0">
+        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shadow-sm z-10 sticky top-0 safe-top">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm">TH</div>
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm">TH</div>
             <div>
-              <h1 className="font-bold text-slate-800 text-sm">Thầy Trần Hoài Thanh</h1>
+              <h1 className="font-bold text-slate-800 text-sm leading-tight">Thầy Trần Hoài Thanh</h1>
               <p className="text-xs text-emerald-600">Trợ lý Toán học</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => setShowApiKeyModal(true)}
-              className="flex items-center gap-1 px-2 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 transition-colors"
+              className="flex items-center justify-center w-10 h-10 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+              title="Cài đặt API"
             >
-              <Settings size={14} />
-              <span className="hidden xs:inline">API</span>
+              <Settings size={20} />
             </button>
-            <button onClick={() => setIsSidebarOpen(true)} className="text-slate-600 p-1 hover:bg-slate-100 rounded-lg">
-              <Menu size={24} />
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="flex items-center justify-center w-10 h-10 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              title="Menu"
+            >
+              <Menu size={22} />
             </button>
           </div>
         </header>
@@ -239,11 +247,11 @@ function App() {
         </div>
 
         {/* Chat Messages Container */}
-        <div className="flex-1 relative flex flex-col min-h-0"> {/* min-h-0 is crucial for flex scrolling */}
+        <div className="flex-1 relative flex flex-col min-h-0">
           <div
             ref={chatContainerRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto p-4 md:p-8 space-y-2 custom-scrollbar scroll-smooth"
+            className="flex-1 overflow-y-auto px-3 py-4 md:px-8 md:py-6 space-y-2 custom-scrollbar scroll-smooth"
           >
             <div className="max-w-3xl mx-auto w-full pb-4">
               {messages.map((msg) => (
@@ -251,7 +259,7 @@ function App() {
               ))}
 
               {isLoading && (
-                <div className="flex w-full mb-6 justify-start animate-fade-in">
+                <div className="flex w-full mb-4 justify-start animate-fade-in">
                   <div className="bg-white border border-slate-200 px-4 py-3 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
                     <div className="flex space-x-1">
                       <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
@@ -269,15 +277,15 @@ function App() {
           {showScrollButton && (
             <button
               onClick={() => scrollToBottom('smooth')}
-              className="absolute bottom-4 right-4 md:right-8 bg-white border border-slate-200 text-emerald-600 p-2 rounded-full shadow-lg hover:bg-slate-50 transition-all z-20"
+              className="absolute bottom-3 right-3 md:bottom-4 md:right-8 bg-white border border-slate-200 text-emerald-600 p-2.5 rounded-full shadow-lg hover:bg-slate-50 transition-all z-20"
             >
-              <ArrowDown size={20} />
+              <ArrowDown size={18} />
             </button>
           )}
         </div>
 
         {/* Input Area */}
-        <div className="p-3 md:p-6 bg-white border-t border-slate-200 z-10">
+        <div className="px-3 py-2 md:px-6 md:py-4 bg-white border-t border-slate-200 z-10 safe-bottom">
           <div className="max-w-3xl mx-auto w-full">
 
             <ModeSelector
@@ -288,12 +296,12 @@ function App() {
 
             {/* Image Preview Area */}
             {selectedImage && (
-              <div className="mb-3 relative inline-block animate-in fade-in slide-in-from-bottom-2">
+              <div className="mb-3 relative inline-block animate-fade-in">
                 <div className="relative group">
                   <img
                     src={selectedImage}
                     alt="Preview"
-                    className="h-24 w-auto rounded-xl border border-slate-200 shadow-md object-contain bg-slate-50"
+                    className="h-20 md:h-24 w-auto rounded-xl border border-slate-200 shadow-md object-contain bg-slate-50"
                   />
                   <button
                     onClick={() => setSelectedImage(null)}
@@ -306,12 +314,12 @@ function App() {
               </div>
             )}
 
-            <form onSubmit={handleSendMessage} className="relative flex items-end gap-2">
+            <form onSubmit={handleSendMessage} className="relative flex items-end gap-1.5 md:gap-2">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 className={`
-                      p-3 mb-0.5 rounded-xl transition-all border
+                      p-3 rounded-xl transition-all border flex-shrink-0
                       ${selectedImage
                     ? 'text-emerald-600 bg-emerald-50 border-emerald-200 shadow-sm'
                     : 'text-slate-500 bg-white border-slate-200 hover:bg-slate-50 hover:text-emerald-600'
@@ -333,7 +341,7 @@ function App() {
               <textarea
                 ref={inputRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -341,16 +349,17 @@ function App() {
                   }
                 }}
                 placeholder={selectedImage ? "Thêm ghi chú cho ảnh này..." : "Nhập câu hỏi hoặc bài toán..."}
-                className="flex-1 py-3 px-4 bg-slate-100 border-0 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-slate-800 placeholder:text-slate-400 resize-none min-h-[48px] max-h-[120px]"
-                style={{ height: '48px' }}
+                className="flex-1 py-3 px-4 bg-slate-100 border-0 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-slate-800 placeholder:text-slate-400 resize-none text-[15px] md:text-base leading-relaxed"
+                style={{ height: '48px', maxHeight: window.innerWidth < 768 ? '100px' : '150px' }}
                 disabled={isLoading}
+                rows={1}
               />
 
               <button
                 type="submit"
                 disabled={(!input.trim() && !selectedImage) || isLoading}
                 className={`
-                    p-3 mb-0.5 rounded-xl flex items-center justify-center transition-all
+                    p-3 rounded-xl flex items-center justify-center transition-all flex-shrink-0
                     ${(!input.trim() && !selectedImage) || isLoading
                     ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
                     : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-md hover:shadow-emerald-200'
